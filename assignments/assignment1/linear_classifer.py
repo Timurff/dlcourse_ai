@@ -158,7 +158,6 @@ class LinearSoftmaxClassifier():
             sections = np.arange(batch_size, num_train, batch_size)
             batches_indices = np.array_split(shuffled_indices, sections)
             for batch_index in batches_indices:
-#             batches = [X[batch_index] for batch_index in batches_indices]
                 loss, grad = linear_softmax(X[batch_index], self.W, y[batch_index])
                 l2_reg, l2_grad = l2_regularization(self.W, reg)
                 self.W -= learning_rate * (grad + l2_grad)
