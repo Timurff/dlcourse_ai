@@ -14,8 +14,9 @@ def l2_regularization(W, reg_strength):
       gradient, np.array same shape as W - gradient of weight by l2 loss
     '''
     # TODO: Copy from previous assignment
-    raise Exception("Not implemented!")
-
+    loss = reg_strength * np.power(W, 2).sum()
+    grad = reg_strength * 2 * W
+    
     return loss, grad
 
 
@@ -35,8 +36,16 @@ def softmax_with_cross_entropy(predictions, target_index):
       dprediction, np array same shape as predictions - gradient of predictions by loss value
     '''
     # TODO copy from the previous assignment
-    raise Exception("Not implemented!")
-    return loss, dprediction
+    probs = softmax(preds)
+    loss = cross_entropy_loss(probs, target_index)
+    dprediction = probs.copy()
+    if preds.ndim == 1:
+        dprediction[target_index] -= 1
+        return loss, dprediction
+    else:
+        for ind, value in enumerate(target_index):
+            dprediction[ind, value] -= 1
+        return loss / probs.shape[0], dprediction / probs.shape[0]
 
 
 class Param:
@@ -55,11 +64,14 @@ class ReLULayer:
 
     def forward(self, X):
         # TODO copy from the previous assignment
-        raise Exception("Not implemented!")
+        self.X = X
+        result = np.maximum(X, 0)
+        return result
 
     def backward(self, d_out):
         # TODO copy from the previous assignment
-        raise Exception("Not implemented!")
+        d_result = (self.X >= 0) * 1
+        d_result = np.multiply(d_out, d_result)
         return d_result
 
     def params(self):
@@ -74,12 +86,21 @@ class FullyConnectedLayer:
 
     def forward(self, X):
         # TODO copy from the previous assignment
-        raise Exception("Not implemented!")
+        self.X = Param(X)
+        result = X.dot(self.W.value) + self.B.value
+        return result
 
     def backward(self, d_out):
         # TODO copy from the previous assignment
         
-        raise Exception("Not implemented!")        
+        dW = self.X.value.T.dot(d_out)
+        dX = d_out.dot(self.W.value.T)
+        dB = d_out.sum(axis=0).reshape((1, -1))
+        # It should be pretty similar to linear classifier from
+        # the previous assignment
+        self.B.grad += dB
+        self.W.grad += dW
+        d_input = dX
         return d_input
 
     def params(self):
@@ -114,7 +135,7 @@ class ConvolutionalLayer:
 
     def forward(self, X):
         batch_size, height, width, channels = X.shape
-
+        self.X = Param(X)
         out_height = height - self.filter_size + 1
         out_width = width - self.filter_size + 1
         stride = 1
@@ -125,11 +146,6 @@ class ConvolutionalLayer:
         result = np.zeros((batch_size, out_height, out_width, self.out_channels))
         # It's ok to use loops for going over width and height
         # but try to avoid having any other loops
-#         print(self.filter_size)
-#         print(self.in_channels)
-#         print(self.out_channels)
-#         print(channels)
-        
         
         for y in range(out_height):
             for x in range(out_width):
@@ -146,7 +162,7 @@ class ConvolutionalLayer:
         # when you implemented FullyConnectedLayer
         # Just do it the same number of times and accumulate gradients
 
-        batch_size, height, width, channels = X.shape
+        batch_size, height, width, channels = self.X.value.shape
         _, out_height, out_width, out_channels = d_out.shape
 
         # TODO: Implement backward pass
@@ -160,9 +176,16 @@ class ConvolutionalLayer:
                 # TODO: Implement backward pass for specific location
                 # Aggregate gradients for both the input and
                 # the parameters (W and B)
-                pass
-
-        raise Exception("Not implemented!")
+                dd_out = d_out[:, y, x, :].reshape((out_height*out_width*channels, out_channels))
+                receptive_field = self.X.value[:, y: y + self.filter_size, x: x + self.filter_size, :].reshape((batch_size, self.filter_size * self.filter_size * channels))
+                self.W.grad += receptive_field.T.dot(dd_out).reshape((self.filter_size, self.filter_size, channels, out_channels))
+                self.X.grad += dd_out.dot(self.W.value.reshape(self.filter_size*self.filter_size*self.in_channels, self.out_channels).T).reshape((batch_size, height, width, channels))
+#                 print(dd_out.sum(axis=0), self.B.value)
+                self.B.grad += dd_out.sum(axis=0)
+        
+        d_input = self.X.grad
+        
+        return d_input
 
     def params(self):
         return { 'W': self.W, 'B': self.B }
