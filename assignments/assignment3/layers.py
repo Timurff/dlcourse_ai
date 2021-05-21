@@ -134,23 +134,24 @@ class ConvolutionalLayer:
 
 
     def forward(self, X):
+        X_padded = np.pad(X, pad_width=((0, 0), (self.padding, self.padding), (self.padding, self.padding), (0, 0)), constant_values=0)
         batch_size, height, width, channels = X.shape
-        self.X = Param(X)
-        out_height = height - self.filter_size + 1
-        out_width = width - self.filter_size + 1
+#         self.X = Param(X)
+        self.X_padded = Param(X_padded)
+        out_height = height - self.filter_size + 2 * self.padding + 1
+        out_width = width - self.filter_size + 2 * self.padding + 1
         stride = 1
-        
         # TODO: Implement forward pass
         # Hint: setup variables that hold the result
         # and one x/y location at a time in the loop below
         result = np.zeros((batch_size, out_height, out_width, self.out_channels))
         # It's ok to use loops for going over width and height
         # but try to avoid having any other loops
-        
         for y in range(out_height):
             for x in range(out_width):
                 # TODO: Implement forward pass for specific location
-                receptive_field = X[:, y: y + self.filter_size, x: x + self.filter_size, :].reshape((batch_size, self.filter_size * self.filter_size * channels))
+#                 print(X_padded[:, y: y + self.filter_size, x: x + self.filter_size, :].shape)
+                receptive_field = X_padded[:, y: y + self.filter_size, x: x + self.filter_size, :].reshape((batch_size, self.filter_size * self.filter_size * channels))
                 result[:, y, x, :] = receptive_field @ self.W.value.reshape(self.filter_size*self.filter_size*self.in_channels, self.out_channels)
         
         return result + self.B.value
@@ -162,9 +163,8 @@ class ConvolutionalLayer:
         # when you implemented FullyConnectedLayer
         # Just do it the same number of times and accumulate gradients
 
-        batch_size, height, width, channels = self.X.value.shape
+        batch_size, height, width, channels = self.X_padded.value.shape
         _, out_height, out_width, out_channels = d_out.shape
-
         # TODO: Implement backward pass
         # Same as forward, setup variables of the right shape that
         # aggregate input gradient and fill them for every location
@@ -176,17 +176,28 @@ class ConvolutionalLayer:
                 # TODO: Implement backward pass for specific location
                 # Aggregate gradients for both the input and
                 # the parameters (W and B)
-                dd_out = d_out[:, y, x, :].reshape((out_height*out_width*channels, out_channels))
-                receptive_field = self.X.value[:, y: y + self.filter_size, x: x + self.filter_size, :].reshape((batch_size, self.filter_size * self.filter_size * channels))
-                self.W.grad += receptive_field.T.dot(dd_out).reshape((self.filter_size, self.filter_size, channels, out_channels))
-                self.X.grad += dd_out.dot(self.W.value.reshape(self.filter_size*self.filter_size*self.in_channels, self.out_channels).T).reshape((batch_size, height, width, channels))
-#                 print(dd_out.sum(axis=0), self.B.value)
+                
+                dd_out = d_out[:, y, x, :] # (bs, out_chan)
+                
+                receptive_field = self.X_padded.value[:, y: y + self.filter_size, x: x + self.filter_size, :] # (bs, fs, fs, in_chan)
+                receptive_field_reshaped = receptive_field.reshape((batch_size, self.filter_size * self.filter_size * channels)) # (bs, fs*fs*in_chan)
+
+                W_grad_reshaped = receptive_field_reshaped.T.dot(dd_out) # (fs*fs*in_chan, out_chan)
+                self.W.grad += W_grad_reshaped.reshape((self.filter_size, self.filter_size, channels, out_channels)) # (fs, fs, in_chan, out_chan)
+                
+                X_grad_reshaped = dd_out.dot(self.W.value.reshape(self.filter_size*self.filter_size*self.in_channels, self.out_channels).T) # (bs, fs*fs*in_chan)
+                self.X_padded.grad[:, y:y + self.filter_size, x:x + self.filter_size, :] += X_grad_reshaped.reshape((batch_size, self.filter_size, self.filter_size, channels))
+                
                 self.B.grad += dd_out.sum(axis=0)
         
-        d_input = self.X.grad
-        
+        if self.padding != 0:
+            d_input = self.X_padded.grad[:, self.padding: -self.padding, self.padding: -self.padding, :]
+        else:
+            d_input = self.X_padded.grad
+            
         return d_input
 
+    
     def params(self):
         return { 'W': self.W, 'B': self.B }
 
