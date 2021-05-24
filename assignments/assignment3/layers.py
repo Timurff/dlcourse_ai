@@ -220,13 +220,36 @@ class MaxPoolingLayer:
         # TODO: Implement maxpool forward pass
         # Hint: Similarly to Conv layer, loop on
         # output x/y dimension
-        raise Exception("Not implemented!")
-
+        self.X = Param(X)
+        out_height = int((height - self.pool_size) / 2 + 1)
+        out_width = int((width - self.pool_size) / 2 + 1)
+    
+        # TODO: Implement forward pass
+        # Hint: setup variables that hold the result
+        # and one x/y location at a time in the loop below
+        result = np.zeros((batch_size, out_height, out_width, channels))
+        for y in range(out_height):
+            for x in range(out_width):
+                result[:, x, y, :] = np.max(X[:, y*self.stride: y*self.stride + self.pool_size, x*self.stride: x*self.stride + self.pool_size, :], axis=(1, 2))
+        
+        return result
+    
     def backward(self, d_out):
         # TODO: Implement maxpool backward pass
-        batch_size, height, width, channels = self.X.shape
-        raise Exception("Not implemented!")
-
+        
+        batch_size, height, width, channels = self.X.value.shape
+        d_input = np.zeros_like(self.X.value)
+        
+        out_height = int((height - self.pool_size) / 2 + 1)
+        out_width = int((width - self.pool_size) / 2 + 1)
+        
+        for y in range(out_height):
+            for x in range(out_width):
+                window = self.X.value[:, y*self.stride: y*self.stride + self.pool_size, x*self.stride: x*self.stride + self.pool_size, :]
+                d_input[:, y*self.stride: y*self.stride + self.pool_size, x*self.stride: x*self.stride + self.pool_size, :] = (np.max(window, axis=(1, 2), keepdims=True) == window) * d_out[:, y, x, :].reshape((batch_size, 1, 1, channels))
+        
+        return d_input
+                
     def params(self):
         return {}
 
@@ -241,12 +264,13 @@ class Flattener:
         # TODO: Implement forward pass
         # Layer should return array with dimensions
         # [batch_size, hight*width*channels]
-        raise Exception("Not implemented!")
-
+        self.X = Param(X)
+        return X.reshape((batch_size, height*width*channels))
+        
     def backward(self, d_out):
-        # TODO: Implement backward pass
-        raise Exception("Not implemented!")
-
+        # TODO: Implement backward pass        
+        return d_out.reshape((self.X.value.shape))
+        
     def params(self):
         # No params!
         return {}
