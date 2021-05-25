@@ -1,3 +1,6 @@
+import numpy as np
+
+
 def binary_classification_metrics(prediction, ground_truth):
     precision = 0
     recall = 0
@@ -10,4 +13,5 @@ def binary_classification_metrics(prediction, ground_truth):
 
 
 def multiclass_accuracy(prediction, ground_truth):
-    return 0
+    tp_tn = np.sum(prediction == ground_truth)
+    return tp_tn / len(ground_truth) 
